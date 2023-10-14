@@ -14,86 +14,52 @@ class SRD {
     const { data } = await axios.get(entryURL);
     const $ = cheerio.load(data);
 
-    const statblock = $('.statblock');
-    statblock.find('sup').remove();
-
-    const lines = $('.statblock').text().trim().split('\n').slice(1);
-    const [, alignment, size, type] = Parsers.alignmentSizeType(lines[0]);
     const creature = new Creature(Parsers.name($), Parsers.cr($));
+    const $attributes = $('.title + p');
+    const $defense = $('.divider:contains("DEFENSE") + p');
+    const $offense = $('.divider:contains("OFFENSE") + p');
+    const $statistics = $('.divider:contains("STATISTICS") + p');
 
     creature.attributes = {
-      experiencePoints: Parsers.xp($, lines[0]),
-      alignment,
-      size,
-      type,
-      initiative: Parsers.initiative(lines[0]),
-      senses: Parsers.senses(lines[0]),
-      aura: Parsers.aura(lines[0]), // TODO: deep parse aura
+      experiencePoints: Parsers.xp($, $attributes),
+      alignment: Parsers.alignment($attributes),
+      size: Parsers.size($attributes),
+      type: Parsers.type($attributes),
+      initiative: Parsers.initiative($attributes),
+      senses: Parsers.senses($attributes),
     };
 
-    lines.slice(1).forEach((line: string) => {
-      line = line.trim();
+    creature.defense = {
+      ac: Parsers.ac($defense),
+      hp: Parsers.hp($defense),
+      hd: Parsers.hd($defense),
+      regeneration: Parsers.regeneration($defense),
+      fort: Parsers.fort($defense),
+      ref: Parsers.ref($defense),
+      will: Parsers.will($defense),
+      sr: Parsers.sr($defense),
+      immunities: Parsers.immunities($defense),
+      resistances: Parsers.resistances($defense),
+      weaknesses: Parsers.weaknesses($defense),
+    };
 
-      // Defense
-      if (/^AC/.test(line)) {
-        creature.defense = {
-          ac: Parsers.ac(line),
-          touchAC: Parsers.touchAC(line),
-          flatFootedAC: Parsers.flatFootedAC(line),
-          dodgeBonus: Parsers.dodgeBonus(line),
-          naturalBonus: Parsers.naturalBonus(line),
-          hp: Parsers.hp(line),
-          hd: Parsers.hd(line),
-          regeneration: Parsers.regeneration(line),
-          fort: Parsers.fort(line),
-          ref: Parsers.ref(line),
-          will: Parsers.will(line),
-          weaknesses: Parsers.weaknesses(line),
-        };
-      }
-
-      // Offense
-      if (/^Speed/.test(line)) {
-        creature.offense = {
-          speed: Parsers.speed(line),
-          melee: Parsers.melee(line),
-          specialAttacks: Parsers.specialAttacks(line),
-        };
-      }
-      
-      // // Spell-like Abilities (stats)
-      // if (/Spell-Like Abilities/.test(line)) {
-      //   Object.assign(creature.attributes, {
-      //     spell_like_ability_stats: Parsers.spellLikeAbilityStats(line),
-      //   });
-      // }
-
-      // // Spell-like Abilities (...)
-      // if (/^Constant/.test(line)) {
-      //   Object.assign(creature.attributes, {
-      //     spell_like_abilities: Parsers.spellLikeAbilities(line),
-      //   })
-      // }
-      
-      // Statistics
-      if (/^Str /.test(line)) {
-        creature.statistics = {
-          str: Parsers.str(line),
-          dex: Parsers.dex(line),
-          con: Parsers.con(line),
-          int: Parsers.int(line),
-          wis: Parsers.wis(line),
-          cha: Parsers.cha(line),
-          bab: Parsers.bab(line),
-          cmb: Parsers.cmb(line),
-          cmd: Parsers.cmd(line),
-          feats: Parsers.feats(line),
-          skills: Parsers.skills(line),
-          languages: Parsers.languages(line),
-          specialQualities: Parsers.specialQualities(line),
-        };
-      }
-    });
+    creature.offense = {
+      speed: Parsers.speed($offense),
+      melee: Parsers.attack('Melee', $offense),
+      ranged: Parsers.attack('Ranged', $offense),
+    };
+       
+    creature.statistics = {
+      str: Parsers.str($statistics),
+      dex: Parsers.dex($statistics),
+      con: Parsers.con($statistics),
+      int: Parsers.int($statistics),
+      wis: Parsers.wis($statistics),
+      cha: Parsers.cha($statistics),
+      bab: Parsers.bab($statistics),
+      cmb: Parsers.cmb($statistics),
+      cmd: Parsers.cmd($statistics),
+    };
 
     return creature;
   }

@@ -1,4 +1,4 @@
-import { CheerioAPI } from 'cheerio';
+import { Cheerio, Element, CheerioAPI } from 'cheerio';
 import startCase from 'lodash/startCase';
 
 function trim(str: string) {
@@ -9,112 +9,144 @@ function split(str: string) {
   return str.split(/(?![^(]*\)),/);
 }
 
-const ALIGNMENT_PATTERN = 'LG|NG|CG|LN|N|CN|LE|NE|CE';
+  const ALIGNMENT_PATTERN = 'LG|NG|CG|LN|N|CN|LE|NE|CE';
 const SIZE_PATTERN = 'Fine|Diminutive|Tiny|Small|Medium|Large|Huge|Gargantuan|Colossal';
 const TYPE_PATTERN = 'aberration|animal|construct|dragon|fey|humanoid|magical beast|monstrous humanoid|ooze|outsider|plant|undead|vermin';
-const ALIGNMENT_SIZE_TYPE_PATTERN = RegExp(`(${ALIGNMENT_PATTERN}) (${SIZE_PATTERN}) (${TYPE_PATTERN})`);
 
 namespace Parsers {
   export function name ($: CheerioAPI) {
-    return $('h1').text();
+    return $('.title').text().match(/(.*)(CR)/)![1].trim();
   }
 
   export function cr($: CheerioAPI) {
-    const match = $('.level').text().match(/\d+/g);
+    const match = $('.level').text().match(/\d+/);
     return Number(match);
   }
 
-  export function xp ($: CheerioAPI, line: string) {
+  export function xp ($: CheerioAPI, $attributes: Cheerio<Element>) {
     const xpLine = $('.level').text().match(/(XP )(\d+(,\d+)*)/);
     let xp;
 
     if (xpLine) {
       xp = Number(xpLine[2].replace(/,/g, ''));
     } else {
-      xp = Number(line.match(/(XP )(\d+(,\d+)*)/)![2].replace(',', ''));
+      xp = Number($attributes.text().match(/(XP )(\d+(,\d+)*)/)![2].replace(',', ''));
     }
 
     return xp;
   }
 
-  export function alignmentSizeType(line: string) {
-    return line.match(ALIGNMENT_SIZE_TYPE_PATTERN)!;
+  export function alignment ($attributes: Cheerio<Element>) {
+    return $attributes.text().match(ALIGNMENT_PATTERN)![0];
   }
 
-  export function initiative(line: string) {
-    const match = line.match(/Init ([+-–]\d+)/)![1];
+  export function size ($attributes: Cheerio<Element>) {
+    return $attributes.text().match(SIZE_PATTERN)![0];
+  }
+
+  export function type ($attributes: Cheerio<Element>) {
+    return $attributes.text().match(TYPE_PATTERN)![0];
+  }
+
+  export function initiative($attributes: Cheerio<Element>) {
+    const match = $attributes.text().match(/Init ([+-–]\d+)/)![1];
     return Number(match.replace('–', '-'));
   }
 
-  export function senses(line: string) {
-    return split(line.match(/Senses (.*);/)![1]).map(trim)
+  export function senses($attributes: Cheerio<Element>) {
+    const match = $attributes.text().match(/Senses (.+?)(?:;|$)/);
+    return split(match![1]).map(trim);
   }
 
-  export function aura(line: string) {
-    const match = line.match(/Aura (.*);/);
-    return match ? match[1] : null;
+  export function ac($defense: Cheerio<Element>) {
+    const text = $defense.text();
+    const deflectionBonus = text.match(/([+|-]\d+) deflection/);
+    const dodgeBonus = text.match(/([+|-]\d+) dodge/);
+    const insightBonus = text.match(/([+|-]\d+) insight/);
+    const naturalBonus = text.match(/([+|-]\d+) natural/);
+    const sacredBonus = text.match(/([+|-]\d+) sacred/);
+    const profaneBonus = text.match(/([+|-]\d+) profane/);
+    
+    return {
+      total: Number(text.match(/AC (\d+)/)![1]),
+      touch: Number(text.match(/touch (\d+)/)![1]),
+      flatFooted: Number(text.match(/flat-footed (\d+)/)![1]),
+      deflectionBonus: deflectionBonus ? Number(deflectionBonus[1]) : 0,
+      dodgeBonus: dodgeBonus ? Number(dodgeBonus[1]) : 0,
+      insightBonus: insightBonus ? Number(insightBonus[1]) : 0,
+      naturalBonus: naturalBonus ? Number(naturalBonus[1]) : 0,
+      sacredBonus: sacredBonus ? Number(sacredBonus[1]) : 0,
+      profaneBonus: profaneBonus ? Number(profaneBonus[1]) : 0
+    };
   }
 
-  export function ac(line: string) {
-    return Number(line.match(/AC (\d+)/)![1]);
+  export function hp($defense: Cheerio<Element>) {
+    return Number($defense.text().match(/hp (\d+)/)![1])
   }
 
-  export function touchAC(line: string) {
-    return Number(line.match(/touch (\d+)/)![1]);
+  export function hd($defense: Cheerio<Element>) {
+    return Number($defense.text().match(/d(\d+)/)![1])
   }
 
-  export function flatFootedAC(line: string) {
-    return Number(line.match(/flat-footed (\d+)/)![1])
+  export function regeneration($defense: Cheerio<Element>) {
+    const match = $defense.text().match(/regeneration (\d+ \(.*\)(?:;|\s))/);
+    return match ? trim(match[1]) : null;
   }
 
-  export function dodgeBonus(line: string) {
-    const match = line.match(/([+|-]\d+) dodge/);
-    return match ? Number(match[1]) : 0;
-  }
-
-  export function naturalBonus(line: string) {
-    const match = line.match(/([+|-]\d+) natural/);
-    return match ? Number(match[1]) : 0;
-  }
-
-  export function hp(line: string) {
-    return Number(line.match(/hp (\d+)/)![1])
-  }
-
-  export function hd(line: string) {
-    return Number(line.match(/d(\d+)/)![1])
-  }
-
-  export function regeneration(line: string) {
-    const match = line.match(/regeneration \d+ \(.*\);/);
-    return match ? match[1] : null;
-  }
-
-  export function fort(line: string) {
-    const match = line.match(/Fort ([+-–]\d+)/);
+  export function fort($defense: Cheerio<Element>) {
+    const match = $defense.text().match(/Fort ([+-–]\d+)/);
     return Number(match![1].replace('–', '-'));
   }
 
-  export function ref(line: string) {
-    const match = line.match(/Ref ([+-–]\d+)/);
+  export function ref($defense: Cheerio<Element>) {
+    const match = $defense.text().match(/Ref ([+-–]\d+)/);
     return Number(match![1].replace('–', '-'));
   }
 
-  export function will(line: string) {
-    const match = line.match(/Will ([+-–]\d+)/);
+  export function will($defense: Cheerio<Element>) {
+    const match = $defense.text().match(/Will ([+-–]\d+)/);
     return Number(match![1].replace('–', '-'));
   }
 
-  export function weaknesses(line: string) {
-    const match = line.match(/Weaknesses (.*)/);
+  export function defensiveAbilities($defense: Cheerio<Element>) {
+    const match = $defense.text().match(/Defensive Abilities (.+?);/);
+    return match ? match![1].split(',') : [];
+  }
+
+  // export function dr($defense: Cheerio<Element>) {
+  //   const match = $defense.text().match(/DR (\d+\/.*?)(?:;|$)/);
+
+  //   if (!match) {
+  //     return null;
+  //   }
+  // }
+
+  export function sr($defense: Cheerio<Element>) {
+    const match = $defense.text().match(/SR (\d+)(?:;|$)/);
+    return match ? Number(match![1]) : null;
+  }
+
+  export function resistances($defense: Cheerio<Element>) {
+    const match = $defense.text().match(/Resist (.+?);/);
+    return match ? match![1].split(',').map(trim) : [];
+  }
+
+  export function immunities($defense: Cheerio<Element>) {
+    const match = $defense.text().match(/Immune (.+?);/);
+    return match ? match![1].split(',').map(trim) : [];
+  }
+
+  export function weaknesses($defense: Cheerio<Element>) {
+    const match = $defense.text().match(/Weaknesses (.*)/);
     return match ? split(match[1]) : [];
   }
 
-  export function speed(line: string) {
-    const landSpeed = line.match(/Speed (\d+)/);
-    const flySpeed = line.match(/fly (\d+)/);
-    const swimSpeed = line.match(/swim (\d+)/);
-    const burrowSpeed = line.match(/burrow (\d+)/);
+  export function speed($offense: Cheerio<Element>) {
+    const text = $offense.text();
+    const landSpeed = text.match(/Speed (\d+)/);
+    const flySpeed = text.match(/fly (\d+)/);
+    const swimSpeed = text.match(/swim (\d+)/);
+    const burrowSpeed = text.match(/burrow (\d+)/);
 
     return {
       land: Number(landSpeed![1]),
@@ -124,18 +156,18 @@ namespace Parsers {
     };
   }
 
-  export function melee(line: string) {
-    const match = line.match(/Melee (\d+)?(\w+\s\w+)? ([+-]\d+) \((\d+d\d+)([+-]\d+)\/?(\d+–\d+)?/);
-    console.log(match)
+  export function attack(type: string, $offense: Cheerio<Element>) {
+    const pattern = new RegExp(`${type} (.*?) ([+-]\\d+\\/?)+ \\((\\d+d\\d+)([+-]\\d+)\\/?(\\d+–\\d+)?(x\\d)?( plus .*?\\))?`);
+    const match = $offense.text().match(pattern);
 
     return match ? {
-      type: match[2],
-      attacks: match[1] ? Number(match[1]) : 1,
-      attackBonus: Number(match[3]),
-      damage: match[4],
-      modifier: Number(match[5]),
-      critRange: match[6] ? match[6].replace('/', '') : '20',
-      effect: null//line.match(/Melee .* plus ([\w\s]+)/)![1]
+      type: match[1],
+      attackBonus: match[2].split('/').map(Number),
+      damage: match[3],
+      damageModifier: Number(match[4]),
+      critRange: match[5] ? match[5].replace('/', '') : '20',
+      critModifier: match[6] ? match[6] : null,
+      effect: match[7] ? trim(match[7]).replace(')', '').replace('plus ', '') : null
     } : null;
   }
 
@@ -144,44 +176,44 @@ namespace Parsers {
     return match ? split(match[1]).map(trim) : [];
   }
 
-  export function str(line: string) {
-    return Number(line.match(/Str (\d+)/)![1]);
+  export function str($statistics: Cheerio<Element>) {
+    return Number($statistics.text().match(/Str (\d+)/)![1]);
   }
 
-  export function dex(line: string) {
-    return Number(line.match(/Dex (\d+)/)![1]);
+  export function dex($statistics: Cheerio<Element>) {
+    return Number($statistics.text().match(/Dex (\d+)/)![1]);
   }
 
-  export function con(line: string) {
-    return Number(line.match(/Con (\d+)/)![1]);
+  export function con($statistics: Cheerio<Element>) {
+    return Number($statistics.text().match(/Con (\d+)/)![1]);
   }
 
-  export function int(line: string) {
-    return Number(line.match(/Int (\d+)/)![1]);
+  export function int($statistics: Cheerio<Element>) {
+    return Number($statistics.text().match(/Int (\d+)/)![1]);
   }
 
-  export function wis(line: string) {
-    return Number(line.match(/Wis (\d+)/)![1]);
+  export function wis($statistics: Cheerio<Element>) {
+    return Number($statistics.text().match(/Wis (\d+)/)![1]);
   }
 
-  export function cha(line: string) {
-    return Number(line.match(/Cha (\d+)/)![1]);
+  export function cha($statistics: Cheerio<Element>) {
+    return Number($statistics.text().match(/Cha (\d+)/)![1]);
   }
 
-  export function bab(line: string) {
-    return Number(line.match(/Base Atk ([+|-]\d+)/)![1]);
+  export function bab($statistics: Cheerio<Element>) {
+    return Number($statistics.text().match(/Base Atk ([+|-]\d+)/)![1]);
   }
 
-  export function cmb(line: string) {
-    return Number(line.match(/CMB ([+|-]\d+)/)![1]);
+  export function cmb($statistics: Cheerio<Element>) {
+    return Number($statistics.text().match(/CMB ([+|-]\d+)/)![1]);
   }
 
-  export function cmd(line: string) {
-    return Number(line.match(/CMD (\d+)/)![1]);
+  export function cmd($statistics: Cheerio<Element>) {
+    return Number($statistics.text().match(/CMD (\d+)/)![1]);
   }
 
-  export function feats(line:string) {
-    const match = line.match(/Feats (.*)\s?(Skills)/)![1];
+  export function feats($statistics: Cheerio<Element>) {
+    const match = $statistics.text().match(/Feats (.*)\s?(Skills)/)![1];
     return match ? split(match).map(trim) : [];
   }
   export function skills(line: string) {
@@ -192,11 +224,11 @@ namespace Parsers {
       'climb',
       // TODO: craft
       'diplomacy',
-      'disable_device',
+      'disableDevice',
       'disguise',
-      'escape_artist',
+      'escapeArtist',
       'fly',
-      'handle_animal',
+      'handleAnimal',
       'heal',
       'intimidate',
       // TODO: knowledge
@@ -205,13 +237,13 @@ namespace Parsers {
       'perform',
       'profession',
       'ride',
-      'sense_motive',
-      'sleight_of_hand',
+      'senseMotive',
+      'sleightOfHand',
       'spellcraft',
       'stealth',
       'survival',
       'swim',
-      'use_magic_device',
+      'useMagicDevice',
     ];
 
     const skillBonuses = skills.reduce((bonuses, skill) => {
@@ -228,17 +260,14 @@ namespace Parsers {
   }
 
   export function languages(line: string) {
-    const match = line.match(/Languages (.*?)(?=(SQ|$))/);
-    return match![1].split(';').map(trim);
+    const match = line.match(/Languages (.*?)(?:(Gear|SQ|$))/);
+    return match ? match![1].split(/,|;/).map(trim) : [];
   }
 
   export function specialQualities(line: string) {
     const match = line.match(/SQ (.*)/)
     return match ? split(match[1]).map(trim) : [];
   }
-}
-
-export default Parsers;
 
 //   spellLikeAbilityStats: line => {
 //     const match = line.match(/Spell-Like Abilities \(CL (\d+)\w+; concentration [+-](\d+)/);
@@ -264,5 +293,7 @@ export default Parsers;
 //     });
 //   },
 // };
+}
 
-// module.exports = Parsers;
+export default Parsers;
+
